@@ -1,0 +1,22 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Ajouter un planning d'arrosage",
+        "description": "Choisissez le switch de la vanne et l'entite timer optionnelle pour ce planning d'arrosage.",
+        "data": {
+          "name": "Nom",
+          "device_id": "Appareil de la vanne",
+          "valve_entity": "Entite switch de la vanne",
+          "timer_entity": "Entite number du timer"
+        }
+      }
+    },
+    "error": {
+      "missing_valve": "Selectionnez une entite switch pour la vanne."
+    },
+    "abort": {
+      "already_configured": "Cette vanne est deja configuree."
+    }
+  }
+}

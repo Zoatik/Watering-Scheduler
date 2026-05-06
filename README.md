@@ -1,102 +1,65 @@
-# Garden Watering Card
+# Watering Scheduler
 
-Custom Lovelace card for scheduling Home Assistant valve watering.
+Home Assistant custom integration and Lovelace card for scheduling automatic garden watering valves.
 
 It is designed for valve devices with:
 
 - a `switch` entity that opens the valve
-- a `number` entity used elsewhere as the watering timer
+- an optional `number` or `input_number` entity used elsewhere as the watering timer
 
-The card stores the full weekly schedule in one Home Assistant `input_text` helper per valve. It lets an automation trigger `switch.turn_on` at the configured times and does not handle shutoff.
+The integration stores the weekly schedule internally, checks the schedule every minute, and calls `switch.turn_on` when the current day and time match. It does not handle shutoff; your valve timer can keep doing that.
 
 ## HACS Installation
 
-This repository can be added to HACS as a custom dashboard repository.
+This repository is now a HACS custom integration repository.
 
 1. Push this folder to a public GitHub repository.
 2. In Home Assistant, open HACS.
 3. Open the three-dot menu.
 4. Select **Custom repositories**.
 5. Add your GitHub repository URL.
-6. Select category **Dashboard**.
-7. Install **Garden Watering Card**.
-8. Reload the browser after installation.
+6. Select category **Integration**.
+7. Install **Watering Scheduler**.
+8. Restart Home Assistant.
 
-HACS will install the card from:
+## Configure A Valve
 
-```text
-dist/garden-watering-card.js
-```
+After restart:
 
-The Lovelace resource should then be:
+1. Go to **Settings > Devices & services**.
+2. Click **Add integration**.
+3. Search for **Watering Scheduler**.
+4. Enter a name, for example `Potager`.
+5. Select the valve device if useful.
+6. Select the valve `switch` entity.
+7. Optionally select the timer `number` or `input_number` entity.
+
+The integration creates a schedule sensor for the valve. The sensor exposes the config entry ID, valve entity, timer entity, and current schedule for the Lovelace card.
+
+## Dashboard Resource
+
+Add this dashboard resource once:
 
 ```yaml
-url: /hacsfiles/garden-watering-card/garden-watering-card.js
+url: /watering_scheduler/garden-watering-card.js
 type: module
 ```
 
-Depending on the final GitHub repository name, HACS may generate a slightly different `/hacsfiles/...` path. Use the resource path shown by HACS after installation.
-
-## Manual Installation
-
-Copy `dist/garden-watering-card.js` to:
+The card is served by the integration from:
 
 ```text
-/config/www/garden-watering-card.js
+custom_components/watering_scheduler/www/garden-watering-card.js
 ```
-
-Then add this dashboard resource:
-
-```yaml
-url: /local/garden-watering-card.js
-type: module
-```
-
-## Helper
-
-Create one `input_text` per valve:
-
-```yaml
-input_text:
-  arrosage_potager_schedule:
-    name: Planning arrosage potager
-    max: 255
-```
-
-Home Assistant limits entity states, including `input_text`, to 255 characters. The card therefore stores a compact JSON value and omits disabled days that have no times. The first array item enables the day: `1` means enabled, `0` means disabled. The remaining items are watering times.
-
-```json
-{
-  "mon": [1, "06:00", "19:30"],
-  "tue": [0],
-  "wed": [1, "07:15"]
-}
-```
-
-See `home-assistant-example.yaml` for a complete Home Assistant example.
-
-## Visual Editor
-
-The card includes a native Lovelace visual editor. From the dashboard editor you can select:
-
-- the valve device
-- the valve `switch` entity
-- the timer `number` or `input_number` entity
-- the schedule `input_text` helper
-
-The selected device is optional metadata for the editor. The card runtime uses `valve_entity`, `timer_entity`, and `schedule_entity`.
 
 ## Dashboard Card
+
+Add a manual card and select the schedule sensor created by the integration:
 
 ```yaml
 type: custom:garden-watering-card
 title: Potager
 valve_name: Vanne potager
-# Optional. Easier to set from the visual editor.
-device_id: optional_home_assistant_device_id
-valve_entity: switch.vanne_potager
-timer_entity: number.vanne_potager_timer
-schedule_entity: input_text.arrosage_potager_schedule
+schedule_entity: sensor.potager_schedule
 days:
   - key: mon
     label: Lun
@@ -114,6 +77,30 @@ days:
     label: Dim
 ```
 
-## Automation
+The card includes a native Lovelace visual editor. In normal use you only need to select the Watering Scheduler schedule sensor.
 
-Use the automation example in `home-assistant-example.yaml`. It checks the current weekday and time once per minute, reads the JSON schedule from the configured `input_text`, then turns on the valve when there is a match.
+## Schedule Storage
+
+Schedules are stored in Home Assistant `.storage` by the integration, not in helpers. The card sends updates through:
+
+```yaml
+service: watering_scheduler.set_schedule
+```
+
+Payload format:
+
+```json
+{
+  "entry_id": "config_entry_id",
+  "schedule": {
+    "mon": [1, "06:00", "19:30"],
+    "wed": [1, "07:15"]
+  }
+}
+```
+
+The first array item enables the day: `1` means enabled, `0` means disabled. Remaining items are watering times.
+
+## Manual Development Install
+
+Copy `custom_components/watering_scheduler` to your Home Assistant `custom_components` directory, restart Home Assistant, then add the integration from the UI.

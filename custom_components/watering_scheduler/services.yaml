@@ -1,0 +1,16 @@
+set_schedule:
+  name: Set schedule
+  description: Store the weekly watering schedule for a configured valve.
+  fields:
+    entry_id:
+      required: true
+      name: Entry ID
+      description: Config entry ID exposed by the Watering Scheduler schedule sensor.
+      selector:
+        text:
+    schedule:
+      required: true
+      name: Schedule
+      description: Compact weekly schedule object, for example {"mon":[1,"06:00"]}.
+      selector:
+        object:

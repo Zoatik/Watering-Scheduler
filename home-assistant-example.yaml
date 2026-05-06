@@ -1,26 +1,21 @@
-# Add this resource manually only if you are not installing through HACS.
+# After installing the integration through HACS, add this dashboard resource:
 lovelace:
   resources:
-    - url: /local/garden-watering-card.js
+    - url: /watering_scheduler/garden-watering-card.js
       type: module
 
-input_text:
-  arrosage_potager_schedule:
-    name: Planning arrosage potager
-    max: 255
+# Then add one integration entry from:
+# Settings > Devices & services > Add integration > Watering Scheduler
+# Select the valve switch and optional timer number/input_number.
 
-# Dashboard card example.
+# Dashboard card example. The schedule_entity is the sensor created by the integration.
 views:
   - title: Jardin
     cards:
       - type: custom:garden-watering-card
         title: Potager
         valve_name: Vanne potager
-        # Optional. Easier to set from the visual editor.
-        device_id: optional_home_assistant_device_id
-        valve_entity: switch.vanne_potager
-        timer_entity: number.vanne_potager_timer
-        schedule_entity: input_text.arrosage_potager_schedule
+        schedule_entity: sensor.potager_schedule
         days:
           - key: mon
             label: Lun
@@ -36,34 +31,3 @@ views:
             label: Sam
           - key: sun
             label: Dim
-
-# The schedule is stored as compact JSON in input_text.arrosage_potager_schedule.
-# The first array item enables the day: 1 = enabled, 0 = disabled.
-# Example value:
-# {"mon":[1,"06:00","19:30"],"tue":[0],"wed":[1,"07:15"]}
-automation:
-  - alias: Arrosage potager planifie
-    id: arrosage_potager_planifie
-    mode: single
-    triggers:
-      - trigger: time_pattern
-        minutes: "/1"
-    variables:
-      now_time: "{{ now().strftime('%H:%M') }}"
-      day_key: >-
-        {{ ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'][now().isoweekday() | int - 1] }}
-    conditions:
-      - condition: template
-        value_template: >-
-          {% set schedule = states('input_text.arrosage_potager_schedule') | from_json(default={}) %}
-          {% set today = schedule.get(day_key, [0]) %}
-          {{ today[0] | int == 1 }}
-      - condition: template
-        value_template: >-
-          {% set schedule = states('input_text.arrosage_potager_schedule') | from_json(default={}) %}
-          {% set today = schedule.get(day_key, [0]) %}
-          {{ now_time in today[1:] }}
-    actions:
-      - action: switch.turn_on
-        target:
-          entity_id: switch.vanne_potager

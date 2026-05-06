@@ -1,0 +1,22 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Add watering schedule",
+        "description": "Choose the valve switch and optional timer entity for this watering schedule.",
+        "data": {
+          "name": "Name",
+          "device_id": "Valve device",
+          "valve_entity": "Valve switch entity",
+          "timer_entity": "Timer number entity"
+        }
+      }
+    },
+    "error": {
+      "missing_valve": "Select a valve switch entity."
+    },
+    "abort": {
+      "already_configured": "This valve is already configured."
+    }
+  }
+}

@@ -1,9 +1,7 @@
-# Garden Watering Card
+# Watering Scheduler
 
-A Lovelace dashboard card for scheduling Home Assistant valve watering.
+A Home Assistant custom integration and Lovelace card for scheduling garden watering valves.
 
-The card includes a native Lovelace visual editor for selecting the valve device, switch entity, timer number/input_number entity, and schedule input_text helper.
+The integration is configured from the Home Assistant UI. It stores schedules internally, exposes a schedule sensor for each valve, and turns on the configured valve switch at matching scheduled times.
 
-The card stores the complete weekly schedule in one Home Assistant `input_text` helper per valve using a compact JSON format that fits Home Assistant's entity state limit. Each day can be enabled or disabled and can contain multiple `HH:MM` watering times.
-
-The card does not control watering duration. It only turns the configured valve switch on at scheduled times; your existing valve timer entity can handle shutoff.
+The included card provides a visual weekly scheduler with per-day enable switches and multiple watering times per day.

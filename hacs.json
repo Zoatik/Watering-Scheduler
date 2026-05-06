@@ -1,5 +1,5 @@
 {
-  "name": "Garden Watering Card",
-  "filename": "garden-watering-card.js",
-  "render_readme": true
+  "name": "Watering Scheduler",
+  "render_readme": true,
+  "domains": ["watering_scheduler"]
 }
