@@ -86,6 +86,9 @@ days:
 
 The card includes a native Lovelace visual editor. In normal use you only need to select the Watering Scheduler schedule sensor.
 
+While selecting or typing a time, the card defers Home Assistant state refreshes so the native time picker does not close mid-selection. Press `Enter` in a time field to add the selected time without using the plus button.
+
+
 ## Schedule Storage
 
 Schedules are stored in Home Assistant `.storage` by the integration, not in helpers. The card sends updates through:

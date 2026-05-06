@@ -83,6 +83,10 @@ class GardenWateringCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
+    if (this.isTimeInputActive()) {
+      this._renderPending = true;
+      return;
+    }
     this.render();
   }
 
@@ -92,6 +96,7 @@ class GardenWateringCard extends HTMLElement {
 
   render() {
     if (!this.shadowRoot || !this.config || !this._hass) return;
+    this._renderPending = false;
 
     const scheduleState = this._hass.states[this.config.schedule_entity];
     const attrs = scheduleState?.attributes || {};
@@ -207,6 +212,26 @@ class GardenWateringCard extends HTMLElement {
       });
     }
 
+    this.shadowRoot.querySelectorAll('[data-role="time-input"]').forEach((input) => {
+      input.addEventListener("focus", () => {
+        this._timeInputActive = true;
+      });
+      input.addEventListener("blur", () => {
+        this._timeInputActive = false;
+        window.setTimeout(() => {
+          if (this._renderPending && !this.isTimeInputActive()) this.render();
+        }, 160);
+      });
+      input.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter") return;
+        event.preventDefault();
+        const dayElement = event.currentTarget.closest(".day");
+        this.addTime(dayElement.dataset.day, event.currentTarget.value);
+        event.currentTarget.value = "";
+        event.currentTarget.blur();
+      });
+    });
+
     this.shadowRoot.querySelectorAll("[data-action]").forEach((element) => {
       element.addEventListener("click", (event) => {
         const action = event.currentTarget.dataset.action;
@@ -217,10 +242,16 @@ class GardenWateringCard extends HTMLElement {
           const input = dayElement.querySelector('[data-role="time-input"]');
           this.addTime(dayKey, input.value);
           input.value = "";
+          input.blur();
         }
         if (action === "remove-time") this.removeTime(dayKey, event.currentTarget.dataset.time);
       });
     });
+  }
+
+  isTimeInputActive() {
+    const active = this.shadowRoot?.activeElement;
+    return this._timeInputActive || active?.matches?.('[data-role="time-input"]');
   }
 
   toggleDay(dayKey) {
