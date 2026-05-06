@@ -96,6 +96,7 @@ class GardenWateringCard extends HTMLElement {
 
   render() {
     if (!this.shadowRoot || !this.config || !this._hass) return;
+    this.ensureStructure();
     this._renderPending = false;
 
     const scheduleState = this._hass.states[this.config.schedule_entity];
@@ -108,37 +109,42 @@ class GardenWateringCard extends HTMLElement {
     const valveState = this.state(this.valveEntity);
     const timerState = this.state(this.timerEntity);
     const missingBinding = !this.entryId || !this.valveEntity;
+    const content = this.shadowRoot.querySelector(".card-content");
+
+    content.innerHTML = `
+      <header>
+        <div>
+          <h2>${this.escape(this.config.title)}</h2>
+          <p>${this.escape(this.config.valve_name)}</p>
+        </div>
+        <button class="power ${valveState === "on" ? "is-on" : ""}" title="Ouvrir la vanne" ${missingBinding ? "disabled" : ""}>
+          <ha-icon icon="mdi:water-pump"></ha-icon>
+        </button>
+      </header>
+
+      <div class="status">
+        <span class="dot ${valveState === "on" ? "is-on" : ""}"></span>
+        <span>${valveState === "on" ? "Ouverte" : "Fermee"}</span>
+        ${this.timerEntity ? `<span class="timer">Timer ${this.escape(timerState)} s</span>` : ""}
+      </div>
+
+      ${missingBinding ? `<div class="warning">Selectionnez un capteur Watering Scheduler valide.</div>` : ""}
+
+      <div class="days">
+        ${this.config.days.map((day) => this.renderDay(day)).join("")}
+      </div>
+    `;
+
+    this.bindEvents();
+  }
+
+  ensureStructure() {
+    if (this._structureReady) return;
 
     this.shadowRoot.innerHTML = `
-      <ha-card>
-        <div class="card">
-          <header>
-            <div>
-              <h2>${this.escape(this.config.title)}</h2>
-              <p>${this.escape(this.config.valve_name)}</p>
-            </div>
-            <button class="power ${valveState === "on" ? "is-on" : ""}" title="Ouvrir la vanne" ${missingBinding ? "disabled" : ""}>
-              <ha-icon icon="mdi:water-pump"></ha-icon>
-            </button>
-          </header>
-
-          <div class="status">
-            <span class="dot ${valveState === "on" ? "is-on" : ""}"></span>
-            <span>${valveState === "on" ? "Ouverte" : "Fermee"}</span>
-            ${this.timerEntity ? `<span class="timer">Timer ${this.escape(timerState)} s</span>` : ""}
-          </div>
-
-          ${missingBinding ? `<div class="warning">Selectionnez un capteur Watering Scheduler valide.</div>` : ""}
-
-          <div class="days">
-            ${this.config.days.map((day) => this.renderDay(day)).join("")}
-          </div>
-        </div>
-      </ha-card>
-
       <style>
         :host { display: block; --watering-accent: var(--primary-color, #0b7f6b); --watering-on: #0f9d58; --watering-border: rgba(127, 127, 127, 0.22); --watering-muted: var(--secondary-text-color, #69737d); --watering-chip: rgba(15, 157, 88, 0.12); }
-        .card { padding: 18px; }
+        .card-content { padding: 18px; }
         header { align-items: center; display: flex; gap: 16px; justify-content: space-between; }
         h2 { font-size: 20px; font-weight: 650; line-height: 1.2; margin: 0; }
         p { color: var(--watering-muted); font-size: 13px; margin: 4px 0 0; }
@@ -168,11 +174,14 @@ class GardenWateringCard extends HTMLElement {
         .add { align-items: center; display: flex; gap: 8px; }
         input[type="time"] { background: var(--card-background-color, #fff); border: 1px solid var(--watering-border); border-radius: 6px; color: var(--primary-text-color); font: inherit; font-size: 13px; min-height: 32px; padding: 0 8px; }
         .add-time { background: var(--watering-accent); border-radius: 6px; color: white; height: 32px; width: 36px; }
-        @media (max-width: 520px) { .card { padding: 14px; } .day { grid-template-columns: 1fr; } .day-head { justify-content: space-between; } }
+        @media (max-width: 520px) { .card-content { padding: 14px; } .day { grid-template-columns: 1fr; } .day-head { justify-content: space-between; } }
       </style>
+      <ha-card>
+        <div class="card-content"></div>
+      </ha-card>
     `;
 
-    this.bindEvents();
+    this._structureReady = true;
   }
 
   renderDay(day) {
