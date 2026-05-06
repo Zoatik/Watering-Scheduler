@@ -1,0 +1,132 @@
+# Copy garden-watering-card.js to:
+# /config/www/garden-watering-card.js
+#
+# Add this resource in Settings > Dashboards > Resources, or in YAML mode:
+lovelace:
+  resources:
+    - url: /local/garden-watering-card.js
+      type: module
+
+input_boolean:
+  arrosage_potager_lun:
+    name: Arrosage potager lundi
+  arrosage_potager_mar:
+    name: Arrosage potager mardi
+  arrosage_potager_mer:
+    name: Arrosage potager mercredi
+  arrosage_potager_jeu:
+    name: Arrosage potager jeudi
+  arrosage_potager_ven:
+    name: Arrosage potager vendredi
+  arrosage_potager_sam:
+    name: Arrosage potager samedi
+  arrosage_potager_dim:
+    name: Arrosage potager dimanche
+
+input_text:
+  arrosage_potager_lun_heures:
+    name: Heures arrosage potager lundi
+    max: 100
+    pattern: "^$|^(([01][0-9]|2[0-3]):[0-5][0-9])(, ?([01][0-9]|2[0-3]):[0-5][0-9])*$"
+  arrosage_potager_mar_heures:
+    name: Heures arrosage potager mardi
+    max: 100
+    pattern: "^$|^(([01][0-9]|2[0-3]):[0-5][0-9])(, ?([01][0-9]|2[0-3]):[0-5][0-9])*$"
+  arrosage_potager_mer_heures:
+    name: Heures arrosage potager mercredi
+    max: 100
+    pattern: "^$|^(([01][0-9]|2[0-3]):[0-5][0-9])(, ?([01][0-9]|2[0-3]):[0-5][0-9])*$"
+  arrosage_potager_jeu_heures:
+    name: Heures arrosage potager jeudi
+    max: 100
+    pattern: "^$|^(([01][0-9]|2[0-3]):[0-5][0-9])(, ?([01][0-9]|2[0-3]):[0-5][0-9])*$"
+  arrosage_potager_ven_heures:
+    name: Heures arrosage potager vendredi
+    max: 100
+    pattern: "^$|^(([01][0-9]|2[0-3]):[0-5][0-9])(, ?([01][0-9]|2[0-3]):[0-5][0-9])*$"
+  arrosage_potager_sam_heures:
+    name: Heures arrosage potager samedi
+    max: 100
+    pattern: "^$|^(([01][0-9]|2[0-3]):[0-5][0-9])(, ?([01][0-9]|2[0-3]):[0-5][0-9])*$"
+  arrosage_potager_dim_heures:
+    name: Heures arrosage potager dimanche
+    max: 100
+    pattern: "^$|^(([01][0-9]|2[0-3]):[0-5][0-9])(, ?([01][0-9]|2[0-3]):[0-5][0-9])*$"
+
+# Dashboard card example.
+views:
+  - title: Jardin
+    cards:
+      - type: custom:garden-watering-card
+        title: Potager
+        valve_name: Vanne potager
+        valve_entity: switch.vanne_potager
+        timer_entity: number.vanne_potager_timer
+        days:
+          - key: mon
+            label: Lun
+            enabled_entity: input_boolean.arrosage_potager_lun
+            times_entity: input_text.arrosage_potager_lun_heures
+          - key: tue
+            label: Mar
+            enabled_entity: input_boolean.arrosage_potager_mar
+            times_entity: input_text.arrosage_potager_mar_heures
+          - key: wed
+            label: Mer
+            enabled_entity: input_boolean.arrosage_potager_mer
+            times_entity: input_text.arrosage_potager_mer_heures
+          - key: thu
+            label: Jeu
+            enabled_entity: input_boolean.arrosage_potager_jeu
+            times_entity: input_text.arrosage_potager_jeu_heures
+          - key: fri
+            label: Ven
+            enabled_entity: input_boolean.arrosage_potager_ven
+            times_entity: input_text.arrosage_potager_ven_heures
+          - key: sat
+            label: Sam
+            enabled_entity: input_boolean.arrosage_potager_sam
+            times_entity: input_text.arrosage_potager_sam_heures
+          - key: sun
+            label: Dim
+            enabled_entity: input_boolean.arrosage_potager_dim
+            times_entity: input_text.arrosage_potager_dim_heures
+
+automation:
+  - alias: Arrosage potager planifie
+    id: arrosage_potager_planifie
+    mode: single
+    triggers:
+      - trigger: time_pattern
+        minutes: "/1"
+    variables:
+      now_time: "{{ now().strftime('%H:%M') }}"
+      day_index: "{{ now().isoweekday() | int - 1 }}"
+      day_enabled_entities:
+        - input_boolean.arrosage_potager_lun
+        - input_boolean.arrosage_potager_mar
+        - input_boolean.arrosage_potager_mer
+        - input_boolean.arrosage_potager_jeu
+        - input_boolean.arrosage_potager_ven
+        - input_boolean.arrosage_potager_sam
+        - input_boolean.arrosage_potager_dim
+      day_time_entities:
+        - input_text.arrosage_potager_lun_heures
+        - input_text.arrosage_potager_mar_heures
+        - input_text.arrosage_potager_mer_heures
+        - input_text.arrosage_potager_jeu_heures
+        - input_text.arrosage_potager_ven_heures
+        - input_text.arrosage_potager_sam_heures
+        - input_text.arrosage_potager_dim_heures
+      enabled_entity: "{{ day_enabled_entities[day_index] }}"
+      times_entity: "{{ day_time_entities[day_index] }}"
+    conditions:
+      - condition: template
+        value_template: "{{ is_state(enabled_entity, 'on') }}"
+      - condition: template
+        value_template: >
+          {{ now_time in states(times_entity).replace(' ', '').split(',') }}
+    actions:
+      - action: switch.turn_on
+        target:
+          entity_id: switch.vanne_potager
