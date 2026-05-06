@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 
 from homeassistant.const import SERVICE_TURN_ON
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.event import async_track_time_change
+from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.storage import Store
 
 from .const import CONF_TIMER_ENTITY, CONF_VALVE_ENTITY, DAY_KEYS, DOMAIN, STORAGE_VERSION
@@ -30,6 +30,10 @@ class WateringScheduler:
             hass, STORAGE_VERSION, f"{DOMAIN}.{self.entry_id}"
         )
         self.schedule: Schedule = {}
+        self.last_checked: str | None = None
+        self.last_triggered: str | None = None
+        self.last_error: str | None = None
+        self._last_trigger_key: str | None = None
         self._unsub_time: Callable[[], None] | None = None
         self._listeners: list[Callable[[], None]] = []
 
@@ -49,10 +53,10 @@ class WateringScheduler:
         self.async_notify_listeners()
 
     def async_start(self) -> None:
-        """Start minute-based schedule checks."""
+        """Start interval-based schedule checks."""
         if self._unsub_time is None:
-            self._unsub_time = async_track_time_change(
-                self.hass, self._async_check_time, second=0
+            self._unsub_time = async_track_time_interval(
+                self.hass, self._async_check_time, timedelta(seconds=30)
             )
 
     def async_stop(self) -> None:
@@ -82,24 +86,77 @@ class WateringScheduler:
     @callback
     def _async_check_time(self, now: datetime) -> None:
         """Turn on the valve when the current time matches the schedule."""
+        self.last_checked = now.isoformat()
+        self.last_error = None
+
         day_key = DAY_KEYS[now.isoweekday() - 1]
         today = self.schedule.get(day_key, [0])
-        if not today or int(today[0]) != 1:
-            return
-
         current_time = now.strftime("%H:%M")
-        if current_time not in today[1:]:
+        trigger_key = f"{now.date().isoformat()}:{current_time}"
+
+        if not today or int(today[0]) != 1:
+            self.async_notify_listeners()
             return
 
-        _LOGGER.info("Starting watering schedule %s at %s", self.entry_id, current_time)
-        self.hass.async_create_task(
-            self.hass.services.async_call(
+        if current_time not in today[1:]:
+            self.async_notify_listeners()
+            return
+
+        if self._last_trigger_key == trigger_key:
+            self.async_notify_listeners()
+            return
+
+        self._last_trigger_key = trigger_key
+        self.last_triggered = now.isoformat()
+        _LOGGER.info(
+            "Starting watering schedule %s for %s at %s",
+            self.entry_id,
+            self.valve_entity,
+            current_time,
+        )
+        self.hass.async_create_task(self._async_turn_on_valve())
+        self.async_notify_listeners()
+
+    async def async_trigger_now(self) -> None:
+        """Manually trigger the configured valve for diagnostics."""
+        self.last_triggered = datetime.now().astimezone().isoformat()
+        await self._async_turn_on_valve()
+
+    async def _async_turn_on_valve(self) -> None:
+        """Turn on the configured valve."""
+        try:
+            await self.hass.services.async_call(
                 "switch",
                 SERVICE_TURN_ON,
                 {"entity_id": self.valve_entity},
-                blocking=False,
+                blocking=True,
             )
-        )
+        except Exception as err:  # noqa: BLE001 - surfaced in diagnostics attributes.
+            self.last_error = str(err)
+            _LOGGER.exception("Failed to start watering schedule %s", self.entry_id)
+        finally:
+            self.async_notify_listeners()
+
+    def next_run(self, now: datetime) -> str | None:
+        """Return the next scheduled run as an ISO timestamp."""
+        for offset in range(8):
+            candidate_date = now.date() + timedelta(days=offset)
+            day_key = DAY_KEYS[candidate_date.isoweekday() - 1]
+            day = self.schedule.get(day_key, [0])
+            if not day or int(day[0]) != 1:
+                continue
+
+            for time_value in day[1:]:
+                hour = int(str(time_value)[:2])
+                minute = int(str(time_value)[3:])
+                candidate = datetime.combine(candidate_date, datetime.min.time()).replace(
+                    hour=hour,
+                    minute=minute,
+                    tzinfo=now.tzinfo,
+                )
+                if candidate >= now.replace(second=0, microsecond=0):
+                    return candidate.isoformat()
+        return None
 
 
 def normalize_schedule(value: object) -> Schedule:
@@ -138,4 +195,9 @@ def _is_valid_time(value: str) -> bool:
         return False
     hour = value[:2]
     minute = value[3:]
-    return hour.isdigit() and minute.isdigit() and 0 <= int(hour) <= 23 and 0 <= int(minute) <= 59
+    return (
+        hour.isdigit()
+        and minute.isdigit()
+        and 0 <= int(hour) <= 23
+        and 0 <= int(minute) <= 59
+    )

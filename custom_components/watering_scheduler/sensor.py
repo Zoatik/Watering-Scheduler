@@ -6,6 +6,7 @@ from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.util import dt as dt_util
 
 from .const import (
     ATTR_ENTRY_ID,
@@ -57,6 +58,10 @@ class WateringScheduleSensor(SensorEntity):
             ATTR_SCHEDULE: self.scheduler.schedule,
             ATTR_VALVE_ENTITY: self.scheduler.valve_entity,
             ATTR_TIMER_ENTITY: self.scheduler.timer_entity,
+            "last_checked": self.scheduler.last_checked,
+            "last_triggered": self.scheduler.last_triggered,
+            "last_error": self.scheduler.last_error,
+            "next_run": self.scheduler.next_run(dt_util.now()),
         }
 
     async def async_added_to_hass(self) -> None:

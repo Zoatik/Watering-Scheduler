@@ -9,7 +9,14 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 
-from .const import ATTR_ENTRY_ID, ATTR_SCHEDULE, DOMAIN, PLATFORMS, SERVICE_SET_SCHEDULE
+from .const import (
+    ATTR_ENTRY_ID,
+    ATTR_SCHEDULE,
+    DOMAIN,
+    PLATFORMS,
+    SERVICE_SET_SCHEDULE,
+    SERVICE_TRIGGER_NOW,
+)
 from .scheduler import WateringScheduler
 
 
@@ -37,6 +44,20 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
                 vol.Required(ATTR_SCHEDULE): dict,
             }
         ),
+    )
+
+    async def async_trigger_now(call) -> None:
+        entry_id = call.data[ATTR_ENTRY_ID]
+        scheduler = hass.data.get(DOMAIN, {}).get(entry_id)
+        if scheduler is None:
+            raise HomeAssistantError(f"Unknown Watering Scheduler entry_id: {entry_id}")
+        await scheduler.async_trigger_now()
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_TRIGGER_NOW,
+        async_trigger_now,
+        schema=vol.Schema({vol.Required(ATTR_ENTRY_ID): str}),
     )
     return True
 

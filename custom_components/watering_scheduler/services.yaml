@@ -14,3 +14,13 @@ set_schedule:
       description: Compact weekly schedule object, for example {"mon":[1,"06:00"]}.
       selector:
         object:
+trigger_now:
+  name: Trigger now
+  description: Immediately turn on the valve for a configured Watering Scheduler entry.
+  fields:
+    entry_id:
+      required: true
+      name: Entry ID
+      description: Config entry ID exposed by the Watering Scheduler schedule sensor.
+      selector:
+        text:

@@ -108,6 +108,26 @@ Payload format:
 
 The first array item enables the day: `1` means enabled, `0` means disabled. Remaining items are watering times.
 
+## Troubleshooting Scheduled Runs
+
+If the valve does not start at the scheduled time, open **Developer tools > States** and inspect the Watering Scheduler schedule sensor attributes:
+
+- `schedule`: the stored weekly schedule
+- `next_run`: the next calculated watering time
+- `last_checked`: the last time the integration checked the schedule
+- `last_triggered`: the last time the integration attempted to start the valve
+- `last_error`: the last service-call error, if any
+- `valve_entity`: the switch entity that will be turned on
+
+You can test the configured valve without waiting for a schedule by calling:
+
+```yaml
+service: watering_scheduler.trigger_now
+data:
+  entry_id: "ENTRY_ID_FROM_THE_SENSOR_ATTRIBUTES"
+```
+
+If `trigger_now` works but scheduled runs do not, check `schedule`, `next_run`, and your Home Assistant timezone. If `trigger_now` does not work, check `valve_entity` and `last_error`.
 ## Manual Development Install
 
 Copy `custom_components/watering_scheduler` to your Home Assistant `custom_components` directory, restart Home Assistant, then add the integration from the UI.
