@@ -15,11 +15,7 @@ class GardenWateringCard extends HTMLElement {
         {
           name: "schedule_entity",
           required: true,
-          selector: {
-            entity: {
-              filter: { domain: "sensor" },
-            },
-          },
+          selector: { entity: { filter: { domain: "sensor" } } },
         },
       ],
       computeLabel: (schema) => {
@@ -62,9 +58,7 @@ class GardenWateringCard extends HTMLElement {
   }
 
   setConfig(config) {
-    if (!config.schedule_entity) {
-      throw new Error("garden-watering-card requires schedule_entity.");
-    }
+    if (!config.schedule_entity) throw new Error("garden-watering-card requires schedule_entity.");
 
     this.config = {
       title: "Arrosage",
@@ -84,7 +78,7 @@ class GardenWateringCard extends HTMLElement {
   set hass(hass) {
     this._hass = hass;
     if (!this.hasRenderRelevantChange()) return;
-    if (this.isTimeInputActive()) {
+    if (this.isTimeControlActive()) {
       this._renderPending = true;
       return;
     }
@@ -106,7 +100,6 @@ class GardenWateringCard extends HTMLElement {
     const scheduleState = this._hass.states[this.config.schedule_entity];
     const attrs = scheduleState?.attributes || {};
     const valveEntity = attrs.valve_entity || "";
-    const timerEntity = attrs.timer_entity || "";
 
     return JSON.stringify({
       title: this.config.title,
@@ -114,9 +107,8 @@ class GardenWateringCard extends HTMLElement {
       days: this.config.days,
       entry_id: attrs.entry_id || "",
       valve_entity: valveEntity,
-      timer_entity: timerEntity,
+      timer_entity: attrs.timer_entity || "",
       valve_state: this.state(valveEntity),
-      timer_state: this.state(timerEntity),
       schedule: attrs.schedule || {},
     });
   }
@@ -176,21 +168,40 @@ class GardenWateringCard extends HTMLElement {
 
     this.shadowRoot.innerHTML = `
       <style>
-        :host { display: block; --watering-accent: var(--primary-color, #0b7f6b); --watering-on: #0f9d58; --watering-border: rgba(127, 127, 127, 0.22); --watering-muted: var(--secondary-text-color, #69737d); --watering-chip: rgba(15, 157, 88, 0.12); }
+        :host {
+          display: block;
+          --watering-accent: var(--primary-color, #0b7f6b);
+          --watering-on: #0f9d58;
+          --watering-border: var(--ha-card-border-color, rgba(127, 127, 127, 0.22));
+          --watering-muted: var(--secondary-text-color, #69737d);
+          --watering-chip: rgba(15, 157, 88, 0.12);
+        }
+
+        ha-card {
+          background: var(--ha-card-background, var(--card-background-color, white));
+          border-color: var(--ha-card-border-color, transparent);
+          border-radius: var(--ha-card-border-radius, 12px);
+          border-style: solid;
+          border-width: var(--ha-card-border-width, 0);
+          box-shadow: var(--ha-card-box-shadow, none);
+          color: var(--primary-text-color, #212121);
+          overflow: hidden;
+        }
+
         .card-content { padding: 18px; }
         header { align-items: center; display: flex; gap: 16px; justify-content: space-between; }
-        h2 { font-size: 20px; font-weight: 650; line-height: 1.2; margin: 0; }
+        h2 { color: var(--primary-text-color, #212121); font-size: 20px; font-weight: 650; line-height: 1.2; margin: 0; }
         p { color: var(--watering-muted); font-size: 13px; margin: 4px 0 0; }
         button { align-items: center; background: transparent; border: 0; color: inherit; cursor: pointer; display: inline-flex; font: inherit; justify-content: center; padding: 0; }
         button[disabled] { cursor: not-allowed; opacity: 0.45; }
-        .power { background: var(--card-background-color, #fff); border: 1px solid var(--watering-border); border-radius: 999px; box-shadow: var(--ha-card-box-shadow, 0 1px 3px rgba(0, 0, 0, 0.12)); color: var(--watering-muted); height: 44px; min-width: 44px; transition: background 160ms ease, color 160ms ease, transform 160ms ease; width: 44px; }
+        .power { background: var(--card-background-color, white); border: 1px solid var(--watering-border); border-radius: 999px; box-shadow: var(--ha-card-box-shadow, 0 1px 3px rgba(0, 0, 0, 0.12)); color: var(--watering-muted); height: 44px; min-width: 44px; transition: background 160ms ease, color 160ms ease, transform 160ms ease; width: 44px; }
         .power.is-on { background: var(--watering-on); color: white; }
         .power:active { transform: scale(0.96); }
         .status { align-items: center; color: var(--watering-muted); display: flex; flex-wrap: wrap; font-size: 13px; gap: 8px; margin: 14px 0 16px; }
         .dot { background: #9aa0a6; border-radius: 999px; height: 8px; width: 8px; }
         .dot.is-on { background: var(--watering-on); box-shadow: 0 0 0 4px rgba(15, 157, 88, 0.16); }
         .timer { border-left: 1px solid var(--watering-border); padding-left: 8px; }
-        .warning { background: rgba(244, 180, 0, 0.16); border: 1px solid rgba(244, 180, 0, 0.34); border-radius: 8px; color: var(--primary-text-color); font-size: 13px; margin: 0 0 12px; padding: 10px; }
+        .warning { background: rgba(244, 180, 0, 0.16); border: 1px solid rgba(244, 180, 0, 0.34); border-radius: 8px; color: var(--primary-text-color, #212121); font-size: 13px; margin: 0 0 12px; padding: 10px; }
         .days { display: grid; gap: 10px; }
         .day { border: 1px solid var(--watering-border); border-radius: 8px; display: grid; gap: 10px; grid-template-columns: 70px 1fr; padding: 10px; }
         .day-head { align-items: center; display: flex; gap: 8px; }
@@ -198,15 +209,17 @@ class GardenWateringCard extends HTMLElement {
         .toggle::before { background: white; border-radius: 999px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.24); content: ""; height: 20px; transition: transform 160ms ease; width: 20px; }
         .toggle.is-on { background: var(--watering-on); }
         .toggle.is-on::before { transform: translateX(20px); }
-        .label { font-size: 13px; font-weight: 650; min-width: 28px; }
+        .label { color: var(--primary-text-color, #212121); font-size: 13px; font-weight: 650; min-width: 28px; }
         .schedule { display: grid; gap: 8px; min-width: 0; }
         .chips { display: flex; flex-wrap: wrap; gap: 6px; min-height: 28px; }
-        .chip { align-items: center; background: var(--watering-chip); border: 1px solid rgba(15, 157, 88, 0.28); border-radius: 999px; color: var(--primary-text-color); display: inline-flex; font-size: 13px; gap: 4px; min-height: 26px; padding: 0 4px 0 10px; }
+        .chip { align-items: center; background: var(--watering-chip); border: 1px solid rgba(15, 157, 88, 0.28); border-radius: 999px; color: var(--primary-text-color, #212121); display: inline-flex; font-size: 13px; gap: 4px; min-height: 26px; padding: 0 4px 0 10px; }
         .chip button { border-radius: 999px; color: var(--watering-muted); height: 22px; width: 22px; }
-        .empty { color: var(--watering-muted); font-size: 13px; line-height: 28px; }
-        .add { align-items: center; display: flex; gap: 8px; }
-        input[type="time"] { background: var(--card-background-color, #fff); border: 1px solid var(--watering-border); border-radius: 6px; color: var(--primary-text-color); font: inherit; font-size: 13px; min-height: 32px; padding: 0 8px; }
-        .add-time { background: var(--watering-accent); border-radius: 6px; color: white; height: 32px; width: 36px; }
+        .empty { color: var(--watering-muted); font-size: 13px; line-height: 32px; }
+        .add { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; }
+        .time-select { align-items: center; background: var(--card-background-color, white); border: 1px solid var(--watering-border); border-radius: 6px; color: var(--primary-text-color, #212121); display: inline-flex; min-height: 32px; overflow: hidden; }
+        .time-select select { appearance: none; background: transparent; border: 0; color: var(--primary-text-color, #212121); font: inherit; font-size: 13px; min-height: 32px; padding: 0 8px; text-align: center; }
+        .time-select span { color: var(--watering-muted); font-size: 13px; }
+        .add-time { background: var(--watering-accent); border-radius: 6px; color: var(--text-primary-color, white); height: 32px; width: 36px; }
         @media (max-width: 520px) { .card-content { padding: 14px; } .day { grid-template-columns: 1fr; } .day-head { justify-content: space-between; } }
       </style>
       <ha-card>
@@ -235,13 +248,24 @@ class GardenWateringCard extends HTMLElement {
               </span>
             `).join("") : `<span class="empty">Aucun horaire</span>`}
           </div>
-          <div class="add">
-            <input type="time" data-role="time-input" step="60" />
+          <div class="add" data-role="time-control">
+            <div class="time-select">
+              <select data-role="hour-select" aria-label="Heure">${this.renderOptions(24)}</select>
+              <span>:</span>
+              <select data-role="minute-select" aria-label="Minute">${this.renderOptions(60)}</select>
+            </div>
             <button class="add-time" data-action="add-time" title="Ajouter une heure"><ha-icon icon="mdi:plus"></ha-icon></button>
           </div>
         </div>
       </section>
     `;
+  }
+
+  renderOptions(count) {
+    return Array.from({ length: count }, (_, index) => {
+      const value = String(index).padStart(2, "0");
+      return `<option value="${value}">${value}</option>`;
+    }).join("");
   }
 
   bindEvents() {
@@ -254,23 +278,25 @@ class GardenWateringCard extends HTMLElement {
       });
     }
 
-    this.shadowRoot.querySelectorAll('[data-role="time-input"]').forEach((input) => {
-      input.addEventListener("focus", () => {
-        this._timeInputActive = true;
+    this.shadowRoot.querySelectorAll('[data-role="time-control"]').forEach((control) => {
+      control.addEventListener("pointerdown", () => {
+        this._timeControlActive = true;
       });
-      input.addEventListener("blur", () => {
-        this._timeInputActive = false;
+      control.addEventListener("focusin", () => {
+        this._timeControlActive = true;
+      });
+      control.addEventListener("focusout", () => {
         window.setTimeout(() => {
-          if (this._renderPending && !this.isTimeInputActive()) this.render();
-        }, 160);
+          if (control.contains(this.shadowRoot.activeElement)) return;
+          this._timeControlActive = false;
+          if (this._renderPending && !this.isTimeControlActive()) this.render();
+        }, 200);
       });
-      input.addEventListener("keydown", (event) => {
+      control.addEventListener("keydown", (event) => {
         if (event.key !== "Enter") return;
         event.preventDefault();
         const dayElement = event.currentTarget.closest(".day");
-        this.addTime(dayElement.dataset.day, event.currentTarget.value);
-        event.currentTarget.value = "";
-        event.currentTarget.blur();
+        this.addSelectedTime(dayElement);
       });
     });
 
@@ -280,20 +306,21 @@ class GardenWateringCard extends HTMLElement {
         const dayElement = event.currentTarget.closest(".day");
         const dayKey = dayElement.dataset.day;
         if (action === "toggle-day") this.toggleDay(dayKey);
-        if (action === "add-time") {
-          const input = dayElement.querySelector('[data-role="time-input"]');
-          this.addTime(dayKey, input.value);
-          input.value = "";
-          input.blur();
-        }
+        if (action === "add-time") this.addSelectedTime(dayElement);
         if (action === "remove-time") this.removeTime(dayKey, event.currentTarget.dataset.time);
       });
     });
   }
 
-  isTimeInputActive() {
+  addSelectedTime(dayElement) {
+    const hour = dayElement.querySelector('[data-role="hour-select"]').value;
+    const minute = dayElement.querySelector('[data-role="minute-select"]').value;
+    this.addTime(dayElement.dataset.day, `${hour}:${minute}`);
+  }
+
+  isTimeControlActive() {
     const active = this.shadowRoot?.activeElement;
-    return this._timeInputActive || active?.matches?.('[data-role="time-input"]');
+    return this._timeControlActive || active?.closest?.('[data-role="time-control"]');
   }
 
   toggleDay(dayKey) {
