@@ -8,6 +8,7 @@ from homeassistant.const import SERVICE_TURN_ON
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.storage import Store
+from homeassistant.util import dt as dt_util
 
 from .const import CONF_TIMER_ENTITY, CONF_VALVE_ENTITY, DAY_KEYS, DOMAIN, STORAGE_VERSION
 
@@ -85,14 +86,15 @@ class WateringScheduler:
 
     @callback
     def _async_check_time(self, now: datetime) -> None:
-        """Turn on the valve when the current time matches the schedule."""
-        self.last_checked = now.isoformat()
+        """Turn on the valve when the local time matches the schedule."""
+        local_now = dt_util.as_local(now)
+        self.last_checked = local_now.isoformat()
         self.last_error = None
 
-        day_key = DAY_KEYS[now.isoweekday() - 1]
+        day_key = DAY_KEYS[local_now.isoweekday() - 1]
         today = self.schedule.get(day_key, [0])
-        current_time = now.strftime("%H:%M")
-        trigger_key = f"{now.date().isoformat()}:{current_time}"
+        current_time = local_now.strftime("%H:%M")
+        trigger_key = f"{local_now.date().isoformat()}:{current_time}"
 
         if not today or int(today[0]) != 1:
             self.async_notify_listeners()
@@ -107,9 +109,9 @@ class WateringScheduler:
             return
 
         self._last_trigger_key = trigger_key
-        self.last_triggered = now.isoformat()
+        self.last_triggered = local_now.isoformat()
         _LOGGER.info(
-            "Starting watering schedule %s for %s at %s",
+            "Starting watering schedule %s for %s at local time %s",
             self.entry_id,
             self.valve_entity,
             current_time,
@@ -119,7 +121,7 @@ class WateringScheduler:
 
     async def async_trigger_now(self) -> None:
         """Manually trigger the configured valve for diagnostics."""
-        self.last_triggered = datetime.now().astimezone().isoformat()
+        self.last_triggered = dt_util.now().isoformat()
         await self._async_turn_on_valve()
 
     async def _async_turn_on_valve(self) -> None:
@@ -138,9 +140,12 @@ class WateringScheduler:
             self.async_notify_listeners()
 
     def next_run(self, now: datetime) -> str | None:
-        """Return the next scheduled run as an ISO timestamp."""
+        """Return the next scheduled run as a local ISO timestamp."""
+        local_now = dt_util.as_local(now)
+        current_minute = local_now.replace(second=0, microsecond=0)
+
         for offset in range(8):
-            candidate_date = now.date() + timedelta(days=offset)
+            candidate_date = local_now.date() + timedelta(days=offset)
             day_key = DAY_KEYS[candidate_date.isoweekday() - 1]
             day = self.schedule.get(day_key, [0])
             if not day or int(day[0]) != 1:
@@ -152,9 +157,9 @@ class WateringScheduler:
                 candidate = datetime.combine(candidate_date, datetime.min.time()).replace(
                     hour=hour,
                     minute=minute,
-                    tzinfo=now.tzinfo,
+                    tzinfo=local_now.tzinfo,
                 )
-                if candidate >= now.replace(second=0, microsecond=0):
+                if candidate >= current_minute:
                     return candidate.isoformat()
         return None
 
