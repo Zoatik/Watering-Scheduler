@@ -1,5 +1,4 @@
 {
   "name": "Watering Scheduler",
-  "render_readme": true,
-  "domains": ["watering_scheduler"]
+  "render_readme": true
 }

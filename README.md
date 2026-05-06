@@ -9,6 +9,13 @@ It is designed for valve devices with:
 
 The integration stores the weekly schedule internally, checks the schedule every minute, and calls `switch.turn_on` when the current day and time match. It does not handle shutoff; your valve timer can keep doing that.
 
+## GitHub Repository Settings
+
+The HACS validation action also checks repository metadata that is configured on GitHub, not in this repository. Make sure the GitHub repository has:
+
+- a repository description
+- issues enabled
+- at least one topic, for example: `home-assistant`, `hacs`, `watering`, `irrigation`, `lovelace`
 ## HACS Installation
 
 This repository is now a HACS custom integration repository.
