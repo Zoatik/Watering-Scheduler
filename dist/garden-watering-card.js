@@ -83,11 +83,42 @@ class GardenWateringCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
+    if (!this.hasRenderRelevantChange()) return;
     if (this.isTimeInputActive()) {
       this._renderPending = true;
       return;
     }
     this.render();
+  }
+
+  hasRenderRelevantChange() {
+    const renderKey = this.computeRenderKey();
+    if (!this._structureReady || renderKey !== this._lastRenderKey) {
+      this._pendingRenderKey = renderKey;
+      return true;
+    }
+    return false;
+  }
+
+  computeRenderKey() {
+    if (!this.config || !this._hass) return "";
+
+    const scheduleState = this._hass.states[this.config.schedule_entity];
+    const attrs = scheduleState?.attributes || {};
+    const valveEntity = attrs.valve_entity || "";
+    const timerEntity = attrs.timer_entity || "";
+
+    return JSON.stringify({
+      title: this.config.title,
+      valve_name: this.config.valve_name,
+      days: this.config.days,
+      entry_id: attrs.entry_id || "",
+      valve_entity: valveEntity,
+      timer_entity: timerEntity,
+      valve_state: this.state(valveEntity),
+      timer_state: this.state(timerEntity),
+      schedule: attrs.schedule || {},
+    });
   }
 
   getCardSize() {
@@ -97,6 +128,8 @@ class GardenWateringCard extends HTMLElement {
   render() {
     if (!this.shadowRoot || !this.config || !this._hass) return;
     this.ensureStructure();
+    this._lastRenderKey = this._pendingRenderKey || this.computeRenderKey();
+    this._pendingRenderKey = null;
     this._renderPending = false;
 
     const scheduleState = this._hass.states[this.config.schedule_entity];

@@ -24,7 +24,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     """Set up the Watering Scheduler integration."""
     card_path = Path(__file__).parent / "www" / "garden-watering-card.js"
     await hass.http.async_register_static_paths(
-        [StaticPathConfig("/watering_scheduler/garden-watering-card.js", str(card_path), True)]
+        [StaticPathConfig("/watering_scheduler/garden-watering-card.js", str(card_path), False)]
     )
 
     async def async_set_schedule(call) -> None:
