@@ -1,36 +1,121 @@
 class GardenWateringCard extends HTMLElement {
+  static getConfigForm() {
+    return {
+      schema: [
+        {
+          type: "grid",
+          name: "",
+          flatten: true,
+          column_min_width: "240px",
+          schema: [
+            { name: "title", selector: { text: {} } },
+            { name: "valve_name", selector: { text: {} } },
+          ],
+        },
+        {
+          name: "device_id",
+          selector: {
+            device: {
+              entity: {
+                domain: "switch",
+              },
+            },
+          },
+        },
+        {
+          name: "valve_entity",
+          required: true,
+          selector: {
+            entity: {
+              filter: {
+                domain: "switch",
+              },
+            },
+          },
+        },
+        {
+          name: "timer_entity",
+          selector: {
+            entity: {
+              filter: {
+                domain: ["number", "input_number"],
+              },
+            },
+          },
+        },
+        {
+          name: "schedule_entity",
+          required: true,
+          selector: {
+            entity: {
+              filter: {
+                domain: "input_text",
+              },
+            },
+          },
+        },
+      ],
+      computeLabel: (schema) => {
+        const labels = {
+          title: "Titre",
+          valve_name: "Nom affiche",
+          device_id: "Appareil",
+          valve_entity: "Entite switch de la vanne",
+          timer_entity: "Input number / timer",
+          schedule_entity: "Helper input_text du planning",
+        };
+        return labels[schema.name] || undefined;
+      },
+      computeHelper: (schema) => {
+        const helpers = {
+          device_id: "Optionnel. Sert a retrouver plus facilement l'appareil de la vanne dans l'editeur.",
+          valve_entity: "Switch appele par la carte et par l'automatisation pour ouvrir la vanne.",
+          timer_entity: "Entite number ou input_number qui contient la duree geree ailleurs.",
+          schedule_entity: "Input_text unique ou la carte stocke le planning hebdomadaire compact.",
+        };
+        return helpers[schema.name] || undefined;
+      },
+    };
+  }
   static getStubConfig() {
     return {
       type: "custom:garden-watering-card",
       title: "Arrosage",
+      valve_name: "Vanne",
       valve_entity: "switch.vanne_potager",
       timer_entity: "number.vanne_potager_timer",
+      schedule_entity: "input_text.arrosage_potager_schedule",
       days: GardenWateringCard.defaultDays(),
     };
   }
 
   static defaultDays() {
     return [
-      { key: "mon", label: "Lun", enabled_entity: "", times_entity: "" },
-      { key: "tue", label: "Mar", enabled_entity: "", times_entity: "" },
-      { key: "wed", label: "Mer", enabled_entity: "", times_entity: "" },
-      { key: "thu", label: "Jeu", enabled_entity: "", times_entity: "" },
-      { key: "fri", label: "Ven", enabled_entity: "", times_entity: "" },
-      { key: "sat", label: "Sam", enabled_entity: "", times_entity: "" },
-      { key: "sun", label: "Dim", enabled_entity: "", times_entity: "" },
+      { key: "mon", label: "Lun" },
+      { key: "tue", label: "Mar" },
+      { key: "wed", label: "Mer" },
+      { key: "thu", label: "Jeu" },
+      { key: "fri", label: "Ven" },
+      { key: "sat", label: "Sam" },
+      { key: "sun", label: "Dim" },
     ];
   }
 
   setConfig(config) {
-    if (!config.days || !Array.isArray(config.days) || config.days.length !== 7) {
-      throw new Error("garden-watering-card requires exactly 7 configured days.");
+    if (!config.schedule_entity) {
+      throw new Error("garden-watering-card requires schedule_entity.");
     }
 
     this.config = {
       title: "Arrosage",
       valve_name: "Vanne",
+      days: GardenWateringCard.defaultDays(),
       ...config,
     };
+
+    if (!Array.isArray(this.config.days) || this.config.days.length !== 7) {
+      throw new Error("garden-watering-card requires exactly 7 configured days.");
+    }
 
     if (!this.shadowRoot) {
       this.attachShadow({ mode: "open" });
@@ -52,6 +137,7 @@ class GardenWateringCard extends HTMLElement {
 
     const valveState = this.state(this.config.valve_entity);
     const timerState = this.state(this.config.timer_entity);
+    this.schedule = this.parseSchedule(this.state(this.config.schedule_entity));
 
     this.shadowRoot.innerHTML = `
       <ha-card>
@@ -88,41 +174,11 @@ class GardenWateringCard extends HTMLElement {
           --watering-chip: rgba(15, 157, 88, 0.12);
         }
 
-        .card {
-          padding: 18px;
-        }
-
-        header {
-          align-items: center;
-          display: flex;
-          justify-content: space-between;
-          gap: 16px;
-        }
-
-        h2 {
-          font-size: 20px;
-          font-weight: 650;
-          line-height: 1.2;
-          margin: 0;
-        }
-
-        p {
-          color: var(--watering-muted);
-          font-size: 13px;
-          margin: 4px 0 0;
-        }
-
-        button {
-          align-items: center;
-          background: transparent;
-          border: 0;
-          color: inherit;
-          cursor: pointer;
-          display: inline-flex;
-          font: inherit;
-          justify-content: center;
-          padding: 0;
-        }
+        .card { padding: 18px; }
+        header { align-items: center; display: flex; gap: 16px; justify-content: space-between; }
+        h2 { font-size: 20px; font-weight: 650; line-height: 1.2; margin: 0; }
+        p { color: var(--watering-muted); font-size: 13px; margin: 4px 0 0; }
+        button { align-items: center; background: transparent; border: 0; color: inherit; cursor: pointer; display: inline-flex; font: inherit; justify-content: center; padding: 0; }
 
         .power {
           background: var(--card-background-color, #fff);
@@ -136,171 +192,34 @@ class GardenWateringCard extends HTMLElement {
           width: 44px;
         }
 
-        .power.is-on {
-          background: var(--watering-on);
-          color: white;
-        }
+        .power.is-on { background: var(--watering-on); color: white; }
+        .power:active { transform: scale(0.96); }
+        .status { align-items: center; color: var(--watering-muted); display: flex; flex-wrap: wrap; font-size: 13px; gap: 8px; margin: 14px 0 16px; }
+        .dot { background: #9aa0a6; border-radius: 999px; height: 8px; width: 8px; }
+        .dot.is-on { background: var(--watering-on); box-shadow: 0 0 0 4px rgba(15, 157, 88, 0.16); }
+        .timer { border-left: 1px solid var(--watering-border); padding-left: 8px; }
+        .days { display: grid; gap: 10px; }
+        .day { border: 1px solid var(--watering-border); border-radius: 8px; display: grid; gap: 10px; grid-template-columns: 70px 1fr; padding: 10px; }
+        .day-head { align-items: center; display: flex; gap: 8px; }
 
-        .power:active {
-          transform: scale(0.96);
-        }
-
-        .status {
-          align-items: center;
-          color: var(--watering-muted);
-          display: flex;
-          flex-wrap: wrap;
-          font-size: 13px;
-          gap: 8px;
-          margin: 14px 0 16px;
-        }
-
-        .dot {
-          background: #9aa0a6;
-          border-radius: 999px;
-          height: 8px;
-          width: 8px;
-        }
-
-        .dot.is-on {
-          background: var(--watering-on);
-          box-shadow: 0 0 0 4px rgba(15, 157, 88, 0.16);
-        }
-
-        .timer {
-          border-left: 1px solid var(--watering-border);
-          padding-left: 8px;
-        }
-
-        .days {
-          display: grid;
-          gap: 10px;
-        }
-
-        .day {
-          border: 1px solid var(--watering-border);
-          border-radius: 8px;
-          display: grid;
-          gap: 10px;
-          grid-template-columns: 70px 1fr;
-          padding: 10px;
-        }
-
-        .day-head {
-          align-items: center;
-          display: flex;
-          gap: 8px;
-        }
-
-        .toggle {
-          background: rgba(127, 127, 127, 0.18);
-          border-radius: 999px;
-          height: 24px;
-          justify-content: flex-start;
-          padding: 2px;
-          width: 44px;
-        }
-
-        .toggle::before {
-          background: white;
-          border-radius: 999px;
-          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.24);
-          content: "";
-          height: 20px;
-          transition: transform 160ms ease;
-          width: 20px;
-        }
-
-        .toggle.is-on {
-          background: var(--watering-on);
-        }
-
-        .toggle.is-on::before {
-          transform: translateX(20px);
-        }
-
-        .label {
-          font-size: 13px;
-          font-weight: 650;
-          min-width: 28px;
-        }
-
-        .schedule {
-          display: grid;
-          gap: 8px;
-          min-width: 0;
-        }
-
-        .chips {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 6px;
-          min-height: 28px;
-        }
-
-        .chip {
-          align-items: center;
-          background: var(--watering-chip);
-          border: 1px solid rgba(15, 157, 88, 0.28);
-          border-radius: 999px;
-          color: var(--primary-text-color);
-          display: inline-flex;
-          font-size: 13px;
-          gap: 4px;
-          min-height: 26px;
-          padding: 0 4px 0 10px;
-        }
-
-        .chip button {
-          border-radius: 999px;
-          color: var(--watering-muted);
-          height: 22px;
-          width: 22px;
-        }
-
-        .empty {
-          color: var(--watering-muted);
-          font-size: 13px;
-          line-height: 28px;
-        }
-
-        .add {
-          align-items: center;
-          display: flex;
-          gap: 8px;
-        }
-
-        input[type="time"] {
-          background: var(--card-background-color, #fff);
-          border: 1px solid var(--watering-border);
-          border-radius: 6px;
-          color: var(--primary-text-color);
-          font: inherit;
-          font-size: 13px;
-          min-height: 32px;
-          padding: 0 8px;
-        }
-
-        .add-time {
-          background: var(--watering-accent);
-          border-radius: 6px;
-          color: white;
-          height: 32px;
-          width: 36px;
-        }
+        .toggle { background: rgba(127, 127, 127, 0.18); border-radius: 999px; height: 24px; justify-content: flex-start; padding: 2px; width: 44px; }
+        .toggle::before { background: white; border-radius: 999px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.24); content: ""; height: 20px; transition: transform 160ms ease; width: 20px; }
+        .toggle.is-on { background: var(--watering-on); }
+        .toggle.is-on::before { transform: translateX(20px); }
+        .label { font-size: 13px; font-weight: 650; min-width: 28px; }
+        .schedule { display: grid; gap: 8px; min-width: 0; }
+        .chips { display: flex; flex-wrap: wrap; gap: 6px; min-height: 28px; }
+        .chip { align-items: center; background: var(--watering-chip); border: 1px solid rgba(15, 157, 88, 0.28); border-radius: 999px; color: var(--primary-text-color); display: inline-flex; font-size: 13px; gap: 4px; min-height: 26px; padding: 0 4px 0 10px; }
+        .chip button { border-radius: 999px; color: var(--watering-muted); height: 22px; width: 22px; }
+        .empty { color: var(--watering-muted); font-size: 13px; line-height: 28px; }
+        .add { align-items: center; display: flex; gap: 8px; }
+        input[type="time"] { background: var(--card-background-color, #fff); border: 1px solid var(--watering-border); border-radius: 6px; color: var(--primary-text-color); font: inherit; font-size: 13px; min-height: 32px; padding: 0 8px; }
+        .add-time { background: var(--watering-accent); border-radius: 6px; color: white; height: 32px; width: 36px; }
 
         @media (max-width: 520px) {
-          .card {
-            padding: 14px;
-          }
-
-          .day {
-            grid-template-columns: 1fr;
-          }
-
-          .day-head {
-            justify-content: space-between;
-          }
+          .card { padding: 14px; }
+          .day { grid-template-columns: 1fr; }
+          .day-head { justify-content: space-between; }
         }
       </style>
     `;
@@ -309,14 +228,14 @@ class GardenWateringCard extends HTMLElement {
   }
 
   renderDay(day) {
-    const enabled = this.state(day.enabled_entity) === "on";
-    const times = this.parseTimes(this.state(day.times_entity));
+    const item = this.daySchedule(day.key);
+    const times = item.times;
 
     return `
       <section class="day" data-day="${this.escape(day.key)}">
         <div class="day-head">
           <span class="label">${this.escape(day.label)}</span>
-          <button class="toggle ${enabled ? "is-on" : ""}" data-action="toggle-day" title="Activer ${this.escape(day.label)}"></button>
+          <button class="toggle ${item.enabled ? "is-on" : ""}" data-action="toggle-day" title="Activer ${this.escape(day.label)}"></button>
         </div>
         <div class="schedule">
           <div class="chips">
@@ -357,44 +276,109 @@ class GardenWateringCard extends HTMLElement {
       element.addEventListener("click", (event) => {
         const action = event.currentTarget.dataset.action;
         const dayElement = event.currentTarget.closest(".day");
-        const day = this.config.days.find((item) => item.key === dayElement.dataset.day);
+        const dayKey = dayElement.dataset.day;
 
-        if (action === "toggle-day") {
-          const service = this.state(day.enabled_entity) === "on" ? "turn_off" : "turn_on";
-          this.call("input_boolean", service, day.enabled_entity);
-        }
+        if (action === "toggle-day") this.toggleDay(dayKey);
 
         if (action === "add-time") {
           const input = dayElement.querySelector('[data-role="time-input"]');
-          this.addTime(day, input.value);
+          this.addTime(dayKey, input.value);
           input.value = "";
         }
 
-        if (action === "remove-time") {
-          this.removeTime(day, event.currentTarget.dataset.time);
-        }
+        if (action === "remove-time") this.removeTime(dayKey, event.currentTarget.dataset.time);
       });
     });
   }
 
-  addTime(day, time) {
+  toggleDay(dayKey) {
+    const schedule = this.normalizedSchedule();
+    schedule[dayKey].enabled = !schedule[dayKey].enabled;
+    this.saveSchedule(schedule);
+  }
+
+  addTime(dayKey, time) {
     if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) return;
 
-    const times = this.parseTimes(this.state(day.times_entity));
-    if (!times.includes(time)) times.push(time);
-    this.setTimes(day.times_entity, times.sort());
+    const schedule = this.normalizedSchedule();
+    if (!schedule[dayKey].times.includes(time)) schedule[dayKey].times.push(time);
+    schedule[dayKey].times.sort();
+    this.saveSchedule(schedule);
   }
 
-  removeTime(day, time) {
-    const times = this.parseTimes(this.state(day.times_entity)).filter((item) => item !== time);
-    this.setTimes(day.times_entity, times);
+  removeTime(dayKey, time) {
+    const schedule = this.normalizedSchedule();
+    schedule[dayKey].times = schedule[dayKey].times.filter((item) => item !== time);
+    this.saveSchedule(schedule);
   }
 
-  setTimes(entityId, times) {
+  saveSchedule(schedule) {
     this._hass.callService("input_text", "set_value", {
-      entity_id: entityId,
-      value: times.join(", "),
+      entity_id: this.config.schedule_entity,
+      value: JSON.stringify(this.compactSchedule(schedule)),
     });
+  }
+
+  normalizedSchedule() {
+    const schedule = this.parseSchedule(this.state(this.config.schedule_entity));
+    this.config.days.forEach((day) => {
+      if (!schedule[day.key]) schedule[day.key] = { enabled: false, times: [] };
+      schedule[day.key].enabled = Boolean(schedule[day.key].enabled);
+      schedule[day.key].times = this.parseTimes(schedule[day.key].times);
+    });
+    return schedule;
+  }
+
+  daySchedule(dayKey) {
+    const schedule = this.schedule || this.normalizedSchedule();
+    return schedule[dayKey] || { enabled: false, times: [] };
+  }
+
+  parseSchedule(value) {
+    if (!value || value === "unknown" || value === "unavailable") return {};
+
+    try {
+      const parsed = JSON.parse(value);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+
+      return Object.fromEntries(
+        Object.entries(parsed).map(([dayKey, dayValue]) => {
+          if (Array.isArray(dayValue)) {
+            return [dayKey, { enabled: Boolean(dayValue[0]), times: this.parseTimes(dayValue.slice(1)) }];
+          }
+
+          if (dayValue && typeof dayValue === "object") {
+            return [dayKey, { enabled: Boolean(dayValue.enabled), times: this.parseTimes(dayValue.times) }];
+          }
+
+          return [dayKey, { enabled: false, times: [] }];
+        })
+      );
+    } catch (_error) {
+      return {};
+    }
+  }
+
+  compactSchedule(schedule) {
+    return Object.fromEntries(
+      this.config.days
+        .map((day) => {
+          const item = schedule[day.key] || { enabled: false, times: [] };
+          const times = this.parseTimes(item.times);
+          if (!item.enabled && times.length === 0) return null;
+          return [day.key, [item.enabled ? 1 : 0, ...times]];
+        })
+        .filter(Boolean)
+    );
+  }
+
+  parseTimes(value) {
+    const times = Array.isArray(value) ? value : [];
+    return times
+      .map((item) => String(item).trim())
+      .filter((item) => /^([01]\d|2[0-3]):[0-5]\d$/.test(item))
+      .filter((item, index, items) => items.indexOf(item) === index)
+      .sort();
   }
 
   call(domain, service, entityId) {
@@ -404,17 +388,6 @@ class GardenWateringCard extends HTMLElement {
   state(entityId) {
     if (!entityId || !this._hass.states[entityId]) return "";
     return this._hass.states[entityId].state;
-  }
-
-  parseTimes(value) {
-    if (!value || value === "unknown" || value === "unavailable") return [];
-
-    return value
-      .split(",")
-      .map((item) => item.trim())
-      .filter((item) => /^([01]\d|2[0-3]):[0-5]\d$/.test(item))
-      .filter((item, index, items) => items.indexOf(item) === index)
-      .sort();
   }
 
   escape(value) {

@@ -7,7 +7,7 @@ It is designed for valve devices with:
 - a `switch` entity that opens the valve
 - a `number` entity used elsewhere as the watering timer
 
-The card stores its schedule in Home Assistant helpers and lets an automation trigger `switch.turn_on` at the configured times. It does not handle shutoff.
+The card stores the full weekly schedule in one Home Assistant `input_text` helper per valve. It lets an automation trigger `switch.turn_on` at the configured times and does not handle shutoff.
 
 ## HACS Installation
 
@@ -52,17 +52,39 @@ url: /local/garden-watering-card.js
 type: module
 ```
 
-## Helpers
+## Helper
 
-Create one `input_boolean` and one `input_text` per day, per valve.
+Create one `input_text` per valve:
 
-Each `input_text` stores a comma-separated list of times:
-
-```text
-06:00, 19:30
+```yaml
+input_text:
+  arrosage_potager_schedule:
+    name: Planning arrosage potager
+    max: 255
 ```
 
-See `home-assistant-example.yaml` for a complete example.
+Home Assistant limits entity states, including `input_text`, to 255 characters. The card therefore stores a compact JSON value and omits disabled days that have no times. The first array item enables the day: `1` means enabled, `0` means disabled. The remaining items are watering times.
+
+```json
+{
+  "mon": [1, "06:00", "19:30"],
+  "tue": [0],
+  "wed": [1, "07:15"]
+}
+```
+
+See `home-assistant-example.yaml` for a complete Home Assistant example.
+
+## Visual Editor
+
+The card includes a native Lovelace visual editor. From the dashboard editor you can select:
+
+- the valve device
+- the valve `switch` entity
+- the timer `number` or `input_number` entity
+- the schedule `input_text` helper
+
+The selected device is optional metadata for the editor. The card runtime uses `valve_entity`, `timer_entity`, and `schedule_entity`.
 
 ## Dashboard Card
 
@@ -70,39 +92,28 @@ See `home-assistant-example.yaml` for a complete example.
 type: custom:garden-watering-card
 title: Potager
 valve_name: Vanne potager
+# Optional. Easier to set from the visual editor.
+device_id: optional_home_assistant_device_id
 valve_entity: switch.vanne_potager
 timer_entity: number.vanne_potager_timer
+schedule_entity: input_text.arrosage_potager_schedule
 days:
   - key: mon
     label: Lun
-    enabled_entity: input_boolean.arrosage_potager_lun
-    times_entity: input_text.arrosage_potager_lun_heures
   - key: tue
     label: Mar
-    enabled_entity: input_boolean.arrosage_potager_mar
-    times_entity: input_text.arrosage_potager_mar_heures
   - key: wed
     label: Mer
-    enabled_entity: input_boolean.arrosage_potager_mer
-    times_entity: input_text.arrosage_potager_mer_heures
   - key: thu
     label: Jeu
-    enabled_entity: input_boolean.arrosage_potager_jeu
-    times_entity: input_text.arrosage_potager_jeu_heures
   - key: fri
     label: Ven
-    enabled_entity: input_boolean.arrosage_potager_ven
-    times_entity: input_text.arrosage_potager_ven_heures
   - key: sat
     label: Sam
-    enabled_entity: input_boolean.arrosage_potager_sam
-    times_entity: input_text.arrosage_potager_sam_heures
   - key: sun
     label: Dim
-    enabled_entity: input_boolean.arrosage_potager_dim
-    times_entity: input_text.arrosage_potager_dim_heures
 ```
 
 ## Automation
 
-Use the automation example in `home-assistant-example.yaml`. It checks the current weekday and time once per minute, then turns on the configured valve when there is a match.
+Use the automation example in `home-assistant-example.yaml`. It checks the current weekday and time once per minute, reads the JSON schedule from the configured `input_text`, then turns on the valve when there is a match.
